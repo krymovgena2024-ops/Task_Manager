@@ -138,6 +138,10 @@ def get_task(title: str|None = None, priority: schemas.Priority|None = None, sta
     return tasks
 
 
+def function_test():
+    pass
+
+
 
 app.include_router(router)
 app.include_router(task_router)
