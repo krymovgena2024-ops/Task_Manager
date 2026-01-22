@@ -10,9 +10,6 @@ from . import models, schemas, auth
 from jose import JWTError, jwt
 import time
 
-# команда на создание файла базы данных, (если уже не создан) с параметрами, указанными в engine
-
-
 
 app = FastAPI(title="Task Manager API")
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -136,11 +133,6 @@ def get_task(title: str|None = None, priority: schemas.Priority|None = None, sta
         query = query.filter(models.Task.status == status)
     tasks = query.all()
     return tasks
-
-
-def function_test():
-    pass
-
 
 
 app.include_router(router)
