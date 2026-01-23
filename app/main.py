@@ -1,6 +1,7 @@
 # файл с эндпоинтами и настройками для запуска программы
 
-
+from app.logger_config import setup_logger
+import logging
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from fastapi import FastAPI, Depends, HTTPException, APIRouter, status, BackgroundTasks
 # Session позволяет работать с базой через объекты класса
@@ -10,7 +11,9 @@ from . import models, schemas, auth
 from jose import JWTError, jwt
 import time
 
-
+setup_logger()
+# Создаем логгер именно для этого файла
+logger = logging.getLogger(__name__)
 app = FastAPI(title="Task Manager API")
 router = APIRouter(prefix="/users", tags=["Users"])
 task_router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -25,16 +28,12 @@ def send_high_priority_email(email: str, task_title: str):
     print("---------------------------------")
 
 
-@router.get("/")
-def root():
-    return {"message": "All working"}
-
-
 @router.post("/", response_model=schemas.User, summary="регистрация")
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     # пытаемся найти пользователя с таким же email
     existing_user = db.query(models.User).filter(models.User.email == user.email).first()
     if existing_user:
+        logger.warning(f"Попытка регистрации на занятый email: {user.email}.")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Такой email уже занят")
     hashed_pwd = auth.get_password_hash(user.password)
     db_user = models.User(email = user.email, hashed_password = hashed_pwd)
@@ -48,6 +47,7 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
+        logger.warning(f"Пользователь ввел несуществующие в базе данные: {form_data.username}, {form_data.password}.")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль") 
     access_token = auth.create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
@@ -92,6 +92,7 @@ def delete_task(title: str, current_user: models.User = Depends(get_current_user
                             # Только свои задачи
     # Проверяем, нашлась ли задача
     if not task_to_delete:
+        logger.warning(f"Пользователю {current_user.email} было отказано в удалении задачи")
         raise HTTPException(
             status_code=404, 
             detail=f"Задача с названием '{title}' не найдена или у вас нет прав на её удаление")
@@ -108,6 +109,7 @@ def update_task(title: str, task_data: schemas.TaskUpdate, db: Session = Depends
     # Получаем объект из базы
     db_task = db.query(models.Task).filter(models.Task.title == title, models.Task.owner_id == current_user.id).first()
     if not db_task:
+        logger.warning(f"Пользователю {current_user.email} было отказано в обновлении задачи")
         raise HTTPException(status_code=404, detail=f"Задача с названием '{title}' не найдена или у вас нет прав на её обновление")
     # превращаем схему в словарь, исключая те поля, которые не были переданы в запросе и поля, значение которых None
     update_data = task_data.model_dump(exclude_unset=True, exclude_none=True)
